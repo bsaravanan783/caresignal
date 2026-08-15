@@ -1,0 +1,1 @@
+ALTER TABLE "notification_log" ALTER COLUMN "notification_id" SET NOT NULL;
