@@ -4,7 +4,6 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "db:test": "bun src/index.ts",
     "db:migrate": "bunx drizzle-kit generate",
     "db:studio": "bunx dizzle-kit studio"
   },

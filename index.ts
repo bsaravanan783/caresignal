@@ -1,5 +1,5 @@
 import fastify from "fastify"
-import { db } from "./src/index.ts"
+import { db } from "./src/db/client.ts"
 import * as schema from './src/db/schema';
 import promClient from "prom-client";
 import { Client } from "pg";
