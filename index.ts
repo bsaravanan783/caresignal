@@ -16,9 +16,12 @@ app.get('/healthz', (req, res) => {
 })
 
 app.get('/metrics', async (req, res) => {
-    const metrics = await promClient.register.getMetricsAsJSON();
+    const metrics = await promClient.register.metrics();
 
-    res.status(200).send(metrics);
+    res.status(200).header('content-type', promClient.register.contentType).send(metrics);
 
 })
-app.listen({ port: Number(Bun.env.PORT) || 3000 });
+app.listen({ port: Number(Bun.env.PORT) || 3000, host: '0.0.0.0' });
+
+process.on('SIGINT', () => app.close(() => process.exit(0)))
+process.on('SIGTERM', () => app.close(() => process.exit(0)))
