@@ -5,13 +5,15 @@
   "private": true,
   "scripts": {
     "db:migrate": "bunx drizzle-kit generate",
-    "db:studio": "bunx dizzle-kit studio"
+    "db:studio": "bunx dizzle-kit studio",
+    "test": "vitest"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/pg": "^8.21.0",
     "drizzle-kit": "^1.0.0-rc.4",
-    "tsx": "^4.23.12"
+    "tsx": "^4.23.12",
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "typescript": "^5"
