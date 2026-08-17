@@ -125,19 +125,39 @@ these 3 cannot happen as there is nothing to stop
 ### POST /v1/notification-requests
 
 <!-- Request body. Headers. -->
-
+- patient info(name , email , phonenumber)
+- targetDate
+- isDefualtOffset: boolean
+- offset array [] (if isDefaultOffset is false ) | null
+- in request header we set the idempotecy key as well 
 <!-- Responses: success, and every error case including:
      - same idempotency key + same body
      - same idempotency key + different body
      - target date already past some offsets -->
+     - success response: status code 201 and then the message - notification request created successfully
+     data - the created whole record for the frontend to use for UI
+     - same idempotency key + same body --> 201  +  notification request created successfully+
+          the created whole record for the frontend to use for UI
+     - error messsages 
+          - same idempotency key + different body --> 400 bad request message idempotency key already exists
+          - if they choose custom offest dates and the all the dates already passed then --> 400 bad request with message already past the requested notification offset date 
 
 ### DELETE /v1/notification-requests/:id  (cancel)
 
 <!-- What is legal to cancel, in which states. What is returned when it is not. -->
+when the notification request is in SUBMITTED state the cancellation can be done 
+sucess: return 200 and return the whole record for the frontend to use for UI + message: cancellation done successfully
+
+when the status is COMPLETED,PARTIAL_COMPLETED,CANCELLED, FAILED we return no active notificaitions to cancel
+
 
 ### GET /v1/notification-requests/:id  (status)
 
 <!-- What can a clinic see? Attempts? Errors? Recipient details? -->
+
+the current status , patient info , related notification errors if failed with each attempt as rows
+sent_at based on the notificaitonlogtable created_at field, if in submitted status we get the related notification records and the show what has sent till now and if no we send null and the fronted gets it as no offset is reached yet
+
 
 ---
 
