@@ -1,9 +1,10 @@
-import fastify from "fastify"
+import fastify, { type FastifyReply, type FastifyRequest } from "fastify"
 import { db } from "./src/db/client.ts"
 import * as schema from './src/db/schema';
 import promClient from "prom-client";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "@fastify/type-provider-zod";
 import { notificationRequestSchema } from "./src/zod_schemas/index.ts";
+import { and, eq, makeJitQueryMapper, WithSubquery } from "drizzle-orm";
 
 const app = fastify({
     logger: true
@@ -123,6 +124,63 @@ app.post("/v1/notification-requests",
 
     });
 
+interface GetNotificationRequest {
+    id: String
+}
+app.get("/v1/notification-requests/:id", async (req: FastifyRequest<{ Params: GetNotificationRequest }>, res: FastifyReply) => {
+    const notifcationReqId = Number(req.params.id);
+    const clinicId = Number(req.headers["x-clinic-id"]);
+    const notifcationReq = await db.query.notificationRequestTable.findFirst({
+        where: {
+            id: notifcationReqId,
+            clinicId,
+        }
+    });
+    if (!notifcationReq) {
+        return res.status(404).send("The notification request does not exists");
+    }
+
+    return res.status(200).send({
+        data: notifcationReq
+    });
+
+});
+
+app.delete("/v1/notification-requests/:id", async (req: FastifyRequest<{ Params: { id: String } }>, res: FastifyReply) => {
+    const notifcationReqId = Number(req.params.id);
+    const clinicId = Number(req.headers["x-clinic-id"]);
+    const cancelledNotificationReqAndNotifications = await db.transaction(async (tx) => {
+        const [canceledNotificationReq] = await tx.update(schema.notificationRequestTable).set({
+
+            status: "CANCELLED"
+
+        }).where(and(eq(schema.notificationRequestTable.id, notifcationReqId), eq(schema.notificationRequestTable.clinicId, clinicId),
+            eq(schema.notificationRequestTable.status, "SUBMITTED")
+        )).returning();
+
+        if (!canceledNotificationReq) {
+
+            return null;
+
+        }
+        const cancelledNotification = await tx.update(schema.notificationTable).set({
+            status: "CANCELLED"
+        }).where(and(eq(schema.notificationTable.status, "QUEUED"), eq(schema.notificationTable.notificationRequestId, canceledNotificationReq.id))).returning();
+
+        return {
+            canceledNotificationReq,
+            cancelledNotification
+        };
+    })
+
+    if (!cancelledNotificationReqAndNotifications) {
+        return res.status(404).send("Notification request cancellation failed");
+    }
+
+    return res.status(200).send({
+        data: cancelledNotificationReqAndNotifications
+    });
+});
 app.listen({ port: Number(Bun.env.PORT) || 3000, host: '0.0.0.0' });
 
 process.on('SIGINT', () => app.close(() => process.exit(0)))
