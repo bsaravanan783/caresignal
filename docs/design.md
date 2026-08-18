@@ -233,3 +233,10 @@ we need to create a policy in the db side to stop a clinic from exploiting anoth
 when sending the request to the provider we attach a idempotency key and hence if we retry and the email is already sent means the provider does not send again 
 And 2 worker case 
  we should update hte request whose status is queued to processing likewise but whne getting the request we dont just get the request we combine hte query like where id =1 and status is still queued likewise so if already a worker did take the job it will be in processing status by now
+
+- **What X-Clinic-Id actually does , Why that's acceptable right now ,  What replaces it later** —
+this is a header with no verification and for now it is used a clinic ID , it is kind of a place holder and will be replaced in future when real auth is implement
+
+- **Dealing with patients in notification request** —
+we query the patient table with clinicId+patientemail if no records exists we create orelse we reuse
+and this email lookup only will work till the implementation of encrytion of it then needed to be changed 
