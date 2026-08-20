@@ -5,7 +5,7 @@ import promClient from "prom-client";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "@fastify/type-provider-zod";
 import { notificationRequestSchema } from "./src/zod_schemas/index.ts";
 import { and, eq, makeJitQueryMapper, WithSubquery } from "drizzle-orm";
-
+import "./src/jobs/index.ts";
 const app = fastify({
     logger: true
 }).withTypeProvider<ZodTypeProvider>();
