@@ -6,6 +6,12 @@ services:
     environment:
       DATABASE_URL: postgres://postgres:postgres@db:5432/postgres
       PORT: 3001
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      FAIL_NO: 2
+      RETRY: 3
+      RETRYABLE: True
+      BASE_RETRY_DELAY: 2000
     depends_on:
       - db
   db:
