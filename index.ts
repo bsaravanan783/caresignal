@@ -8,9 +8,12 @@ import { and, eq } from "drizzle-orm";
 import "./src/jobs/jobs.ts";
 import "./src/utils/defineLua.ts"
 import { rateLimiter } from "./src/hooks/rateLimitter.ts";
+import { authPreHandler } from "./src/hooks/auth.ts";
 const app = fastify({
     logger: true
 }).withTypeProvider<ZodTypeProvider>();
+
+app.decorate('clinicId', null);
 
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
@@ -31,7 +34,7 @@ app.get('/metrics', async (req, res) => {
 
 app.post("/v1/notification-requests",
     {
-        preHandler: rateLimiter,
+        preHandler: [authPreHandler, rateLimiter],
         schema: {
             body: notificationRequestSchema,
         }
@@ -39,7 +42,7 @@ app.post("/v1/notification-requests",
     ,
     async (req, res) => {
         const { email, isDefaultOffset, name, phoneNumber, targetDate, offset } = req.body;
-        const clinicId = Number(req.headers["x-clinic-id"]);
+        const clinicId = req.clinicId;
         const idempotencyKey = req.headers["idempotency-key"] ? String(req.headers["idempotency-key"]) : undefined;
         const defaultOffset = [0, 1, 2, 7, 14];
         let offestToUse = defaultOffset;
@@ -130,9 +133,11 @@ app.post("/v1/notification-requests",
 interface GetNotificationRequest {
     id: String
 }
-app.get("/v1/notification-requests/:id", async (req: FastifyRequest<{ Params: GetNotificationRequest }>, res: FastifyReply) => {
+app.get<{ Params: GetNotificationRequest }>("/v1/notification-requests/:id", {
+    preHandler: authPreHandler
+}, async (req, res) => {
     const notifcationReqId = Number(req.params.id);
-    const clinicId = Number(req.headers["x-clinic-id"]);
+    const clinicId = req.clinicId;
     const notifcationReq = await db.query.notificationRequestTable.findFirst({
         where: {
             id: notifcationReqId,
@@ -149,41 +154,44 @@ app.get("/v1/notification-requests/:id", async (req: FastifyRequest<{ Params: Ge
 
 });
 
-app.delete("/v1/notification-requests/:id", async (req: FastifyRequest<{ Params: { id: String } }>, res: FastifyReply) => {
-    const notifcationReqId = Number(req.params.id);
-    const clinicId = Number(req.headers["x-clinic-id"]);
-    const cancelledNotificationReqAndNotifications = await db.transaction(async (tx) => {
-        const [canceledNotificationReq] = await tx.update(schema.notificationRequestTable).set({
+app.delete<{ Params: { id: String } }>("/v1/notification-requests/:id",
+    {
+        preHandler: authPreHandler
+    }, async (req, res) => {
+        const notifcationReqId = Number(req.params.id);
+        const clinicId = req.clinicId;
+        const cancelledNotificationReqAndNotifications = await db.transaction(async (tx) => {
+            const [canceledNotificationReq] = await tx.update(schema.notificationRequestTable).set({
 
-            status: "CANCELLED"
+                status: "CANCELLED"
 
-        }).where(and(eq(schema.notificationRequestTable.id, notifcationReqId), eq(schema.notificationRequestTable.clinicId, clinicId),
-            eq(schema.notificationRequestTable.status, "SUBMITTED")
-        )).returning();
+            }).where(and(eq(schema.notificationRequestTable.id, notifcationReqId), eq(schema.notificationRequestTable.clinicId, clinicId),
+                eq(schema.notificationRequestTable.status, "SUBMITTED")
+            )).returning();
 
-        if (!canceledNotificationReq) {
+            if (!canceledNotificationReq) {
 
-            return null;
+                return null;
 
+            }
+            const cancelledNotification = await tx.update(schema.notificationTable).set({
+                status: "CANCELLED"
+            }).where(and(eq(schema.notificationTable.status, "QUEUED"), eq(schema.notificationTable.notificationRequestId, canceledNotificationReq.id))).returning();
+
+            return {
+                canceledNotificationReq,
+                cancelledNotification
+            };
+        })
+
+        if (!cancelledNotificationReqAndNotifications) {
+            return res.status(404).send("Notification request cancellation failed");
         }
-        const cancelledNotification = await tx.update(schema.notificationTable).set({
-            status: "CANCELLED"
-        }).where(and(eq(schema.notificationTable.status, "QUEUED"), eq(schema.notificationTable.notificationRequestId, canceledNotificationReq.id))).returning();
 
-        return {
-            canceledNotificationReq,
-            cancelledNotification
-        };
-    })
-
-    if (!cancelledNotificationReqAndNotifications) {
-        return res.status(404).send("Notification request cancellation failed");
-    }
-
-    return res.status(200).send({
-        data: cancelledNotificationReqAndNotifications
+        return res.status(200).send({
+            data: cancelledNotificationReqAndNotifications
+        });
     });
-});
 app.listen({ port: Number(Bun.env.PORT) || 3000, host: '0.0.0.0' });
 
 process.on('SIGINT', () => app.close(() => process.exit(0)))

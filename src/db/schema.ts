@@ -1,6 +1,4 @@
-import { Table } from "drizzle-orm";
 import { boolean, snakeCase, integer, pgEnum, text, timestamp, unique, varchar, index } from "drizzle-orm/pg-core";
-
 
 export const patientTable = snakeCase.table("patient", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -77,3 +75,24 @@ export const idempotencyTable = snakeCase.table("idempotency", {
     clinicId: integer().references(() => clinicTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }).notNull(),
     createdAt: timestamp({ mode: 'date' }).defaultNow().notNull(),
 }, (table) => [unique().on(table.clinicId, table.key)])
+
+export const apiKeysTable = snakeCase.table("api_key", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    clinicId: integer().references(() => clinicTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }).notNull(),
+    hash: text().notNull().unique(),
+    label: varchar({ length: 255 }),
+    prefix: varchar({ length: 30 }).notNull(), //cs_live_ + 12 from apikey
+    isActive: boolean().default(true).notNull(),
+    createdAt: timestamp({ mode: 'date' }).defaultNow().notNull(),
+
+})
+
+export const userTable = snakeCase.table("user", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    name: varchar({ length: 255 }).notNull(),
+    email: varchar({ length: 255 }).notNull(),
+    clinicId: integer().references(() => clinicTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }).notNull(),
+    createdAt: timestamp({ mode: 'date' }).defaultNow().notNull(),
+    updatedAt: timestamp({ mode: 'date' }).defaultNow().notNull().$onUpdateFn(() => new Date()),
+
+})

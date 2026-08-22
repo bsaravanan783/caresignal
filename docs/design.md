@@ -245,3 +245,10 @@ and this email lookup only will work till the implementation of encrytion of it 
 configurable environment variables for it
 Token bucket over fixed widow for avoiding boundary doubling problem 
 lua script with redis for check then act behavior for atomicity
+
+- **Authentication Decisions** —
+Chose Api key over jwt for auth as the callers are not human but machines so there are no sessions in browsers
+sha256 over bcryt as the passwords are not human inputs but generated with CSPRNG (Cryptographically Secure Pseudo-Random Number Generator) and we generate the keys using randomBytes and hash with sha256  and but in bcrypt re-hashing the incoming key with the stored salt and comparing in every request slows it down 
+Also it can not be indexed as salted hashes are non-deterministic(same key -> different hash everytime)
+seperate table for api_key for rotation of keys with clinic
+removed x-clinic-id header usage entirely and replaced with clinicId decorated from the auth prehandler 

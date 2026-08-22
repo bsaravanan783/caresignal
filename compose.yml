@@ -14,6 +14,7 @@ services:
       BASE_RETRY_DELAY: 2000
       RL_TOKEN_BUCKET_CAPACITY: 20
       RL_REFILL_SECOND: 3
+      API_KEY_PREFIX: cs_live_
     depends_on:
       - db
   db:

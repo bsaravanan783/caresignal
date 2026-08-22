@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "db:migrate": "bunx drizzle-kit generate",
+    "db:migrate": "bunx drizzle-kit migrate",
+    "db:generate": "bunx drizzle-kit generate",
     "db:studio": "bunx drizzle-kit studio",
     "test": "vitest"
   },

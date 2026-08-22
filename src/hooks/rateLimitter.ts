@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { redisConnection } from "../jobs";
 
 export const rateLimiter = async (req: FastifyRequest, res: FastifyReply) => {
-    const clinicId = Number(req.headers["x-clinic-id"]);
+    const clinicId = req.clinicId;
     if (!clinicId) {
         return res.status(401).send({
 
