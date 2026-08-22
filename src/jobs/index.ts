@@ -6,7 +6,7 @@ const redisConfig = {
     host: Bun.env.REDIS_HOST,
     port: Number(Bun.env.REDIS_PORT)
 }
-const redisConnection = new Redis({ ...redisConfig, maxRetriesPerRequest: null });
+export const redisConnection = new Redis({ ...redisConfig, maxRetriesPerRequest: null });
 
 export const queue = new Queue('pickup', { connection: redisConnection });
 

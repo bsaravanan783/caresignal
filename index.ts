@@ -4,8 +4,10 @@ import * as schema from './src/db/schema';
 import promClient from "prom-client";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "@fastify/type-provider-zod";
 import { notificationRequestSchema } from "./src/zod_schemas/index.ts";
-import { and, eq, makeJitQueryMapper, WithSubquery } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import "./src/jobs/jobs.ts";
+import "./src/utils/defineLua.ts"
+import { rateLimiter } from "./src/hooks/rateLimitter.ts";
 const app = fastify({
     logger: true
 }).withTypeProvider<ZodTypeProvider>();
@@ -29,6 +31,7 @@ app.get('/metrics', async (req, res) => {
 
 app.post("/v1/notification-requests",
     {
+        preHandler: rateLimiter,
         schema: {
             body: notificationRequestSchema,
         }

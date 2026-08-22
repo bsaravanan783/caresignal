@@ -240,3 +240,8 @@ this is a header with no verification and for now it is used a clinic ID , it is
 - **Dealing with patients in notification request** —
 we query the patient table with clinicId+patientemail if no records exists we create orelse we reuse
 and this email lookup only will work till the implementation of encrytion of it then needed to be changed 
+
+- **Ratelimit configuration -capacity,refillrate** —
+configurable environment variables for it
+Token bucket over fixed widow for avoiding boundary doubling problem 
+lua script with redis for check then act behavior for atomicity
