@@ -1,6 +1,6 @@
 import { Job } from "bullmq";
 import { sendEmailNotification } from "../provider/emailProvider";
-import { db } from "../db/client";
+import { workerDb as db } from "../db/client";
 import * as schema from "../db/schema";
 import { and, desc, eq } from "drizzle-orm";
 
@@ -8,9 +8,9 @@ export interface QueueInterface {
     reqId: number,
     notificationId: number
 }
-export interface resolveUp extends QueueInterface { };
+export interface ResolveUpInterface extends QueueInterface { };
 
-const resolveUp = async (data: resolveUp) => {
+const resolveUp = async (data: ResolveUpInterface) => {
     const { notificationId, reqId } = data;
     const totalOffsets = await db.query.notificationOffsetTable.findMany({
         where: {
@@ -66,88 +66,95 @@ const resolveUp = async (data: resolveUp) => {
 }
 
 export const handleProcessingJob = async (job: Job<QueueInterface>) => {
-    const { notificationId, reqId } = job.data;
-    const patientEmail = await db.select({ patientEmail: schema.patientTable.email }).from(schema.notificationRequestTable)
-        .innerJoin(schema.patientTable,
-            and(
-                eq(schema.notificationRequestTable.patientId, schema.patientTable.id),
-                eq(schema.notificationRequestTable.clinicId, schema.patientTable.clinicId)
+
+    try {
+        const { notificationId, reqId } = job.data;
+        const patientEmail = await db.select({ patientEmail: schema.patientTable.email }).from(schema.notificationRequestTable)
+            .innerJoin(schema.patientTable,
+                and(
+                    eq(schema.notificationRequestTable.patientId, schema.patientTable.id),
+                    eq(schema.notificationRequestTable.clinicId, schema.patientTable.clinicId)
+                )
+            ).where(
+                eq(schema.notificationRequestTable.id, reqId)
+            );
+
+        const emailToUse = patientEmail[0]?.patientEmail;
+
+        if (!emailToUse) {
+            await db.update(schema.notificationTable).set({
+                status: "FAILED"
+            }).where(
+                and(
+                    eq(schema.notificationTable.id, notificationId),
+                    eq(schema.notificationTable.status, "PROCESSING")
+                )
             )
-        ).where(
-            eq(schema.notificationRequestTable.id, reqId)
-        );
 
-    const emailToUse = patientEmail[0]?.patientEmail;
+            await db.insert(schema.notificationLogTable).values({
+                attemptNo: 0,
+                notificationId: notificationId,
+                response: "Notification failed as no email found",
+            });
 
-    if (!emailToUse) {
-        await db.update(schema.notificationTable).set({
-            status: "FAILED"
-        }).where(
-            and(
-                eq(schema.notificationTable.id, notificationId),
-                eq(schema.notificationTable.status, "PROCESSING")
-            )
-        )
-
+            await resolveUp({ reqId, notificationId });
+            return;
+        }
+        const [logs] = await db.select().from(schema.notificationLogTable).where(
+            eq(schema.notificationLogTable.notificationId, notificationId),
+        ).orderBy(desc(schema.notificationLogTable.attemptNo)).limit(1);
+        const attemptNo: number | undefined = logs?.attemptNo;
+        const attemptNoToUse = attemptNo !== undefined ? attemptNo + 1 : 0;
+        const numberOfRetry = Number(Bun.env.RETRY);
+        const retryBaseDelay = Number(Bun.env.BASE_RETRY_DELAY);
+        const response = await sendEmailNotification({ patientEmail: emailToUse }, attemptNoToUse);
         await db.insert(schema.notificationLogTable).values({
-            attemptNo: 0,
+            attemptNo: attemptNoToUse,
             notificationId: notificationId,
-            response: "Notification failed as no email found",
+            response: JSON.stringify(response),
+            messageProviderId: response.providerId
         });
 
+
+
+        if (response.success) {
+            await db.update(schema.notificationTable).set({
+                status: "SENT"
+            }).where(
+                and(
+                    eq(schema.notificationTable.id, notificationId),
+                    eq(schema.notificationTable.status, "PROCESSING")
+                ))
+
+        } else if (response.retryable && !response.success && attemptNoToUse <= numberOfRetry) {
+            const nextAttemptTime = new Date(Date.now() + retryBaseDelay * Math.pow(2, attemptNoToUse));
+            await db.update(schema.notificationTable).set({
+                nextAttemptAt: nextAttemptTime,
+                status: "QUEUED"
+            }).where(
+                and(
+                    eq(schema.notificationTable.id, notificationId),
+                    eq(schema.notificationTable.status, "PROCESSING")
+                )
+            );
+        } else {
+            await db.update(schema.notificationTable).set({
+                status: "FAILED"
+            }).where(
+                and(
+                    eq(schema.notificationTable.id, notificationId),
+                    eq(schema.notificationTable.status, "PROCESSING")
+                )
+            )
+
+        }
+
         await resolveUp({ reqId, notificationId });
-        return;
-    }
-    const [logs] = await db.select().from(schema.notificationLogTable).where(
-        eq(schema.notificationLogTable.notificationId, notificationId),
-    ).orderBy(desc(schema.notificationLogTable.attemptNo)).limit(1);
-    const attemptNo: number | undefined = logs?.attemptNo;
-    const attemptNoToUse = attemptNo !== undefined ? attemptNo + 1 : 0;
-    const numberOfRetry = Number(Bun.env.RETRY);
-    const retryBaseDelay = Number(Bun.env.BASE_RETRY_DELAY);
-    const response = await sendEmailNotification({ patientEmail: emailToUse }, attemptNoToUse);
-    await db.insert(schema.notificationLogTable).values({
-        attemptNo: attemptNoToUse,
-        notificationId: notificationId,
-        response: JSON.stringify(response),
-        messageProviderId: response.providerId
-    });
 
-
-
-    if (response.success) {
-        await db.update(schema.notificationTable).set({
-            status: "SENT"
-        }).where(
-            and(
-                eq(schema.notificationTable.id, notificationId),
-                eq(schema.notificationTable.status, "PROCESSING")
-            ))
-
-    } else if (response.retryable && !response.success && attemptNoToUse <= numberOfRetry) {
-        const nextAttemptTime = new Date(Date.now() + retryBaseDelay * Math.pow(2, attemptNoToUse));
-        await db.update(schema.notificationTable).set({
-            nextAttemptAt: nextAttemptTime,
-            status: "QUEUED"
-        }).where(
-            and(
-                eq(schema.notificationTable.id, notificationId),
-                eq(schema.notificationTable.status, "PROCESSING")
-            )
-        );
-    } else {
-        await db.update(schema.notificationTable).set({
-            status: "FAILED"
-        }).where(
-            and(
-                eq(schema.notificationTable.id, notificationId),
-                eq(schema.notificationTable.status, "PROCESSING")
-            )
-        )
+    } catch (err) {
+        console.error("Handle processing job failed", err);
 
     }
-
-    await resolveUp({ reqId, notificationId });
 
 }
 

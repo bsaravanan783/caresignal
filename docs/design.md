@@ -252,3 +252,30 @@ sha256 over bcryt as the passwords are not human inputs but generated with CSPRN
 Also it can not be indexed as salted hashes are non-deterministic(same key -> different hash everytime)
 seperate table for api_key for rotation of keys with clinic
 removed x-clinic-id header usage entirely and replaced with clinicId decorated from the auth prehandler 
+
+- **RLS Decisions** —
+Join-based policies over denormalizing clinic_id — Chose EXISTS subqueries on notification, notification_offset, and notification_log rather than adding a clinic_id column to each. Keeps a single source of truth (a child's clinic can never drift from its parent's) at the cost of a slightly heavier policy expression. notification_log needs a two-level join since neither it nor its parent carries clinic_id.
+
+Three database roles, three connections — caresignal_app (no BYPASSRLS, subject to policies, used by request handlers), caresignal_worker (BYPASSRLS, used by background jobs which scan across all clinics by design), postgres (superuser, admin scripts only). Neither app nor worker is a superuser. The worker deliberately has no grants on api_key, idempotency, clinic, or user — a compromised worker structurally cannot read API key hashes.
+
+Why a separate role was mandatory, not optional — Postgres bypasses RLS for superusers unconditionally and for table owners by default. The app previously connected as postgres, which is both, so policies would have silently done nothing. FORCE ROW LEVEL SECURITY doesn't help since superusers bypass regardless.
+
+Role creation manual, grants and policies in migrations — Role creation happens once and contains a password, so it stays out of version control (run via a script reading from env). Grants and policies change whenever tables change, so they're versioned in migrations. ALTER DEFAULT PRIVILEGES was rejected because it applies uniform privileges to all future tables, which can't express the deliberately table-specific grants here.
+
+Ordering constraint — Roles must exist before the migration (policies reference them); tables must exist before grants. So: create roles → migrate → grant.
+
+set_config(..., true) over SET LOCAL — SET LOCAL can't take bind parameters, forcing string interpolation. set_config accepts a real parameter. The true
+makes it transaction-scoped; with false the value would persisteak into the next request — the exact cross-tenant leak this ismeant to prevent.
+
+withTenant as a function, not a Fastify hook — The config is transaction-scoped, so it and the queries must share one transaction. A preHandler would have
+to hold a transaction open across the entire request lifecycle,d holding locks. Every route touching tenant tables must wrapits queries; forgetting produces a loud error, not a leak.
+
+One-argument current_setting — Errors when unset rather than returning NULL. Chosen deliberately: a missing tenant context is always a bug, and a clear error beats a silently empty result that looks like "no data."
+
+No RLS on api_key — The auth lookup determines the tenant, so icken-and-egg: a policy would make authentication fail foreveryone). Protection instead comes from the app role being the only one with SELECT, and lookups being by unguessable 256-bit hash. Accepted exposure: a
+SQL injection anywhere could enumerate all clinics' key hashes nowing.
+
+RLS as defense-in-depth, not a replacement — Application-level  stay in place. RLS is the backstop. The argument for both: appfiltering scales with the number of queries (fast-growing), RLS scales with request entry points (slow-growing), and the failure modes are opposite — a
+forgotten WHERE returns another tenant's data successfully, a fn error.
+
+pgRole(...).existing() — Tells drizzle-kit the role is externalrence it without trying to create it.
