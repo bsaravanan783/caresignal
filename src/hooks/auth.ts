@@ -6,7 +6,8 @@ import { and, eq } from "drizzle-orm";
 
 declare module 'fastify' {
     interface FastifyRequest {
-        clinicId: number
+        clinicId: number,
+        apiKeyId: number
     }
 }
 
@@ -30,5 +31,6 @@ export const authPreHandler = async (req: FastifyRequest, res: FastifyReply) => 
         })
     }
 
+    req.apiKeyId = response.id
     req.clinicId = response.clinicId;
 }

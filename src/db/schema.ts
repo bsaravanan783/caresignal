@@ -1,5 +1,4 @@
-import { AsyncFifoQueue, tryCatch } from "bullmq";
-import { sql, Table } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { boolean, snakeCase, integer, pgEnum, text, timestamp, unique, varchar, index, pgRole, pgPolicy } from "drizzle-orm/pg-core";
 
 export const appRole = pgRole('caresignal_app').existing();
@@ -177,3 +176,27 @@ export const userTable = snakeCase.table("user", {
     updatedAt: timestamp({ mode: 'date' }).defaultNow().notNull().$onUpdateFn(() => new Date()),
 
 })
+
+export const entityTypeEnum = pgEnum("entity_type", ["NOTIFICATION_REQUEST"]);
+export const entityStateEnum = pgEnum("entity_state", ["SUBMITTED", "COMPLETED", "PARTIAL_COMPLETED", "CANCELLED", "FAILED"]);
+export const actionEnum = pgEnum("action", ["CREATE", "READ", "CANCEL"]);
+export const auditLogTable = snakeCase.table.withRLS("audit_log", {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    apiKeyId: integer().references(() => apiKeysTable.id, { onDelete: 'no action', onUpdate: 'no action' }).notNull(),
+    entityId: integer().notNull(),
+    entityType: entityTypeEnum().notNull(),
+    entityState: entityStateEnum().notNull(),
+    action: actionEnum().notNull(),
+    clinicId: integer().references(() => clinicTable.id, { onDelete: 'no action', onUpdate: 'no action' }).notNull(),
+    createdAt: timestamp({ mode: 'date' }).defaultNow().notNull(),
+}, (table) => [
+    index().on(table.clinicId),
+    index().on(table.entityType, table.entityId),
+    pgPolicy('tenant_isolation', {
+        as: 'permissive',
+        for: 'all',
+        to: appRole,
+        using: sql`clinic_id = current_setting('app.clinic_id')::int`,
+        withCheck: sql`clinic_id = current_setting('app.clinic_id')::int`
+    })
+])

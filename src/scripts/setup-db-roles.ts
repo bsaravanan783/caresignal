@@ -27,6 +27,7 @@ async function assignPermissionsToRoles() {
             GRANT SELECT,INSERT,UPDATE ON TABLE notification_request TO caresignal_app;
             GRANT INSERT ON TABLE notification_offset TO caresignal_app;
             GRANT SELECT,UPDATE ON TABLE notification TO caresignal_app;
+            GRANT SELECT,INSERT ON TABLE audit_log TO caresignal_app;
         `);
 
     const assignWorkerPermissionsQuery = sql.raw(`

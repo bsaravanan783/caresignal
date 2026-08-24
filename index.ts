@@ -10,12 +10,13 @@ import "./src/utils/defineLua.ts"
 import { rateLimiter } from "./src/hooks/rateLimitter.ts";
 import { authPreHandler } from "./src/hooks/auth.ts";
 import { withTenant } from "./src/db/withTenantHelper.ts";
-import { measureMemory } from "node:vm";
+import { AuditLog } from "./src/utils/insertAuditLog.ts";
 const app = fastify({
     logger: true
 }).withTypeProvider<ZodTypeProvider>();
 
-app.decorate('clinicId', null);
+app.decorateRequest('clinicId', 0);
+app.decorateRequest('apiKeyId', 0);
 
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
@@ -121,7 +122,7 @@ app.post("/v1/notification-requests",
                         type: "EMAIL" as const
                     }))
                 );
-
+                await AuditLog(tx, { action: "CREATE", apiKeyId: Number(req.apiKeyId), clinicId: Number(req.clinicId), entityId: notificationRequest[0]!.id, entityState: notificationRequest[0]!.status, entityType: "NOTIFICATION_REQUEST" })
                 return { kind: 'success', status: 201, message: "Request created successfully", data: notificationRequest[0] };
             });
 
@@ -167,6 +168,8 @@ app.get<{ Params: GetNotificationRequest }>("/v1/notification-requests/:id", {
                     clinicId,
                 }
             });
+            await AuditLog(tx, { action: "READ", apiKeyId: Number(req.apiKeyId), clinicId: Number(req.clinicId), entityId: notifcationReqId, entityState: notifcationReq!.status, entityType: "NOTIFICATION_REQUEST" })
+
             return notifcationReq;
 
         });
@@ -209,6 +212,8 @@ app.delete<{ Params: { id: String } }>("/v1/notification-requests/:id",
                 const cancelledNotification = await tx.update(schema.notificationTable).set({
                     status: "CANCELLED"
                 }).where(and(eq(schema.notificationTable.status, "QUEUED"), eq(schema.notificationTable.notificationRequestId, canceledNotificationReq.id))).returning();
+
+                await AuditLog(tx, { action: "CANCEL", apiKeyId: Number(req.apiKeyId), clinicId: Number(req.clinicId), entityId: canceledNotificationReq.id, entityState: canceledNotificationReq.status, entityType: "NOTIFICATION_REQUEST" })
 
                 return {
                     canceledNotificationReq,
