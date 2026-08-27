@@ -6,13 +6,15 @@ export const appRole = pgRole('caresignal_app').existing();
 export const patientTable = snakeCase.table.withRLS("patient", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     name: varchar({ length: 255 }).notNull(),
-    email: varchar({ length: 255 }).notNull(),
+    email: text().notNull(),
+    emailHash: text().unique(),
     createdAt: timestamp({ mode: 'date' }).defaultNow().notNull(),
     updatedAt: timestamp({ mode: 'date' }).defaultNow().notNull().$onUpdateFn(() => new Date()),
     phoneNumber: varchar({ length: 20 }),
     clinicId: integer().references(() => clinicTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }).notNull()
 }, (table) => [
     index().on(table.clinicId),
+    index().on(table.emailHash),
     pgPolicy('tenant_isolation', {
         as: 'permissive',
         for: 'all',

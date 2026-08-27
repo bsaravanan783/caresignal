@@ -11,6 +11,8 @@ import { rateLimiter } from "./src/hooks/rateLimitter.ts";
 import { authPreHandler } from "./src/hooks/auth.ts";
 import { withTenant } from "./src/db/withTenantHelper.ts";
 import { AuditLog } from "./src/utils/insertAuditLog.ts";
+import { decryptHelper, encryptHelper } from "./src/utils/fieldEncrypt.ts";
+import { generateHash } from "./src/utils/hashHelper.ts";
 const app = fastify({
     logger: true
 }).withTypeProvider<ZodTypeProvider>();
@@ -81,20 +83,22 @@ app.post("/v1/notification-requests",
                 } else {
                     return { kind: 'noKey', status: 400, message: "Idempotency key missing " };
                 }
-
+                const emailHash = generateHash(email + String(clinicId));
                 let patient = await tx.query.patientTable.findFirst({
                     where: {
-                        email: email,
+                        emailHash: emailHash,
                         clinicId: clinicId
                     }
                 });
 
                 if (!patient) {
+                    const encryptedEmail = await encryptHelper(email);
                     const [newPatient] = await tx.insert(schema.patientTable).values({
-                        email: email,
+                        email: encryptedEmail,
                         name: name,
                         clinicId: clinicId,
-                        phoneNumber: phoneNumber
+                        phoneNumber: phoneNumber,
+                        emailHash: emailHash
                     }).returning();
                     if (!newPatient) {
                         return { kind: 'createPatientFail', status: 500, message: "Failed to create patient " };

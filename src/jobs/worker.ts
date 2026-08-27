@@ -3,6 +3,7 @@ import { sendEmailNotification } from "../provider/emailProvider";
 import { workerDb as db } from "../db/client";
 import * as schema from "../db/schema";
 import { and, desc, eq } from "drizzle-orm";
+import { decryptHelper } from "../utils/fieldEncrypt";
 
 export interface QueueInterface {
     reqId: number,
@@ -80,7 +81,7 @@ export const handleProcessingJob = async (job: Job<QueueInterface>) => {
             );
 
         const emailToUse = patientEmail[0]?.patientEmail;
-
+        const decryptedEmail = await decryptHelper(emailToUse!);
         if (!emailToUse) {
             await db.update(schema.notificationTable).set({
                 status: "FAILED"
@@ -107,7 +108,7 @@ export const handleProcessingJob = async (job: Job<QueueInterface>) => {
         const attemptNoToUse = attemptNo !== undefined ? attemptNo + 1 : 0;
         const numberOfRetry = Number(Bun.env.RETRY);
         const retryBaseDelay = Number(Bun.env.BASE_RETRY_DELAY);
-        const response = await sendEmailNotification({ patientEmail: emailToUse }, attemptNoToUse);
+        const response = await sendEmailNotification({ patientEmail: decryptedEmail }, attemptNoToUse);
         await db.insert(schema.notificationLogTable).values({
             attemptNo: attemptNoToUse,
             notificationId: notificationId,

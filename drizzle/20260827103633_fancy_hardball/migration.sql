@@ -1,0 +1,1 @@
+ALTER TABLE "patient" ADD CONSTRAINT "patient_email_hash_key" UNIQUE("email_hash");
