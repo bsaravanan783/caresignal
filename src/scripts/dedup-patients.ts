@@ -16,7 +16,7 @@ const dedupePatients = async () => {
         const logMap = new Map<number, [string, number]>();
 
         for (const rec of allEmails) {
-            const decryptedEmail = await decryptHelper(rec.email);
+            const decryptedEmail = await decryptHelper(rec.email, rec.clinicId);
             logMap.set(rec.id, [decryptedEmail, rec.clinicId]);
             const groupKey = `${rec.clinicId}-${decryptedEmail.toLowerCase().trim()}`;
 

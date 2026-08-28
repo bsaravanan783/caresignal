@@ -1,0 +1,1 @@
+ALTER TABLE "clinic" ADD COLUMN "wrapped_dek" text;

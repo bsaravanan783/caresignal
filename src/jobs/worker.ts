@@ -70,7 +70,7 @@ export const handleProcessingJob = async (job: Job<QueueInterface>) => {
 
     try {
         const { notificationId, reqId } = job.data;
-        const patientEmail = await db.select({ patientEmail: schema.patientTable.email }).from(schema.notificationRequestTable)
+        const patientEmail = await db.select({ patientEmail: schema.patientTable.email, clinicId: schema.patientTable.clinicId }).from(schema.notificationRequestTable)
             .innerJoin(schema.patientTable,
                 and(
                     eq(schema.notificationRequestTable.patientId, schema.patientTable.id),
@@ -81,7 +81,7 @@ export const handleProcessingJob = async (job: Job<QueueInterface>) => {
             );
 
         const emailToUse = patientEmail[0]?.patientEmail;
-        const decryptedEmail = await decryptHelper(emailToUse!);
+        const decryptedEmail = await decryptHelper(emailToUse!, patientEmail[0]?.clinicId!);
         if (!emailToUse) {
             await db.update(schema.notificationTable).set({
                 status: "FAILED"

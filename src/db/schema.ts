@@ -28,6 +28,7 @@ export const patientTable = snakeCase.table.withRLS("patient", {
 export const clinicTable = snakeCase.table("clinic", {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     name: varchar({ length: 255 }).notNull(),
+    wrappedDek: text(),
     createdAt: timestamp({ mode: 'date' }).defaultNow().notNull(),
     updatedAt: timestamp({ mode: 'date' }).defaultNow().notNull().$onUpdateFn(() => new Date()),
     isActive: boolean().default(true).notNull()

@@ -92,7 +92,7 @@ app.post("/v1/notification-requests",
                 });
 
                 if (!patient) {
-                    const encryptedEmail = await encryptHelper(email);
+                    const encryptedEmail = await encryptHelper(email, clinicId);
                     const [newPatient] = await tx.insert(schema.patientTable).values({
                         email: encryptedEmail,
                         name: name,

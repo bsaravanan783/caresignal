@@ -11,7 +11,7 @@ const backFillEmailHash = async () => {
         let updatedCount = 0;
         for (const rec of patients) {
             if (!rec.emailHash) {
-                const emailToUse = await decryptHelper(rec.email);
+                const emailToUse = await decryptHelper(rec.email, rec.clinicId);
                 const emailHash = generateHash(emailToUse + String(rec.clinicId));
                 await db.update(patientTable).set({ emailHash: emailHash }).where(
                     eq(patientTable.id, rec.id)

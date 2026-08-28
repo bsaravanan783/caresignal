@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db_postgres_user as db } from "../db/client";
 import { patientTable } from "../db/schema";
-import { encryptHelper } from "../utils/fieldEncrypt";
+import { decryptHelper, encryptHelper } from "../utils/fieldEncrypt";
 
 const reEncrypt = async () => {
     try {
@@ -11,8 +11,9 @@ const reEncrypt = async () => {
         for (const rec of patients) {
             const email = rec.email;
             const version = email.split(":")[0];
-            if (version !== "v1") {
-                const encryptedEmail = await encryptHelper(email);
+            if (version !== "v2") {
+                const decryptedEmail = await decryptHelper(email, rec.clinicId);
+                const encryptedEmail = await encryptHelper(decryptedEmail, rec.clinicId);
                 await db.update(patientTable).set({
                     email: encryptedEmail
                 }).where(eq(patientTable.id, rec.id));
